@@ -59,7 +59,9 @@ public:
     //backsub_voxel_points_pub = private_nh.advertise<sensor_msgs::PointCloud2>("backsub_voxel_points", 1, true);
     //backsub_voxel_markers_pub = private_nh.advertise<visualization_msgs::Marker>("backsub_voxel_marker", 1, true);
 
+    filtered_cloud_pub = private_nh.advertise<sensor_msgs::PointCloud2>("filtered_cloud", 10);
     clusters_pub = private_nh.advertise<hdl_people_tracking::ClusterArray>("clusters", 10);
+
 
     // subscribers
     //globalmap_sub = nh.subscribe("/globalmap", 1, &HdlPeopleDetectionNodelet::globalmap_callback, this);
@@ -117,7 +119,21 @@ private:
     pcl::PassThrough<PointT> pass;
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(-1.0, 1.8);
+    pass.setFilterLimits(-0.4, 1.8);
+    pass.filter(*cloud_filtered);
+
+    cloud = cloud_filtered;
+
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(-5, 5);
+    pass.filter(*cloud_filtered);
+
+    cloud = cloud_filtered;
+
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-5, 5);
     pass.filter(*cloud_filtered);
 
     cloud = cloud_filtered;
@@ -249,9 +265,13 @@ private:
       clusters_pub.publish(clusters_msg);
     }
 
-    //if(backsub_points_pub.getNumSubscribers()) {
-    //  backsub_points_pub.publish(filtered);
-    //}
+    if(filtered_cloud_pub.getNumSubscribers()) {
+      sensor_msgs::PointCloud2Ptr filtered_msg(new sensor_msgs::PointCloud2());
+      pcl::toROSMsg(*filtered, *filtered_msg);
+      filtered_msg->header.frame_id = globalmap->header.frame_id;
+      filtered_msg->header.stamp = stamp;
+      filtered_cloud_pub.publish(filtered_msg);
+    }
 
     if(cluster_points_pub.getNumSubscribers()) {
       pcl::PointCloud<pcl::PointXYZI>::Ptr accum(new pcl::PointCloud<pcl::PointXYZI>());
@@ -262,7 +282,8 @@ private:
       accum->height = 1;
       accum->is_dense = false;
 
-      accum->header.stamp = filtered->header.stamp;
+      //accum->header.stamp = filtered->header.stamp;
+      accum->header.stamp = stamp;
       accum->header.frame_id = globalmap->header.frame_id;
 
       cluster_points_pub.publish(accum);
@@ -348,6 +369,7 @@ private:
   ros::Publisher cluster_points_pub;
   ros::Publisher human_points_pub;
   ros::Publisher detection_markers_pub;
+  ros::Publisher filtered_cloud_pub;
   //ros::Publisher backsub_voxel_markers_pub;
 
   ros::Publisher clusters_pub;
